@@ -15,12 +15,12 @@ import pickle  # save model to disk
 from dotenv import load_dotenv  # load env variables
 import os  # access env variables
 from preprocess import load_transformed_data, preprocess  # import preprocess functions
-from mlflow_tracker import log_run  # import mlflow logging function
+from mlflow_tracker import log_all_runs  # import mlflow logging function
 
 load_dotenv()  # load .env file
 
 def train():
-    df = load_transformed_data()  # load transformed data from mysql
+    df = load_transformed_data()  # load transformed data from postgresql
     X, y = preprocess(df)  # apply scaling, feature selection and SMOTE
 
     # split into 80% train and 20% test
@@ -29,17 +29,33 @@ def train():
     # train random forest model
     rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
     rf_model.fit(X_train, y_train)  # fit on training data
-    rf_acc = accuracy_score(y_test, rf_model.predict(X_test))  # evaluate accuracy
-    print(f"Random Forest Accuracy: {rf_acc:.4f}")  # log accuracy
+    print(f"Random Forest Accuracy: {accuracy_score(y_test, rf_model.predict(X_test)):.4f}")
 
     # train xgboost model
     xgb_model = XGBClassifier(n_estimators=100, random_state=42, eval_metric='logloss')
     xgb_model.fit(X_train, y_train)  # fit on training data
-    xgb_acc = accuracy_score(y_test, xgb_model.predict(X_test))  # evaluate accuracy
-    print(f"XGBoost Accuracy: {xgb_acc:.4f}")  # log accuracy
+    print(f"XGBoost Accuracy: {accuracy_score(y_test, xgb_model.predict(X_test)):.4f}")
+
+    # calculate metrics for random forest
+    rf_metrics = {
+        'acc': accuracy_score(y_test, rf_model.predict(X_test)),          # accuracy
+        'pre': precision_score(y_test, rf_model.predict(X_test)),          # precision
+        'rec': recall_score(y_test, rf_model.predict(X_test)),             # recall
+        'f1':  f1_score(y_test, rf_model.predict(X_test)),                 # f1 score
+        'auc': roc_auc_score(y_test, rf_model.predict_proba(X_test)[:,1])  # roc auc
+    }
+
+    # calculate metrics for xgboost
+    xgb_metrics = {
+        'acc': accuracy_score(y_test, xgb_model.predict(X_test)),          # accuracy
+        'pre': precision_score(y_test, xgb_model.predict(X_test)),          # precision
+        'rec': recall_score(y_test, xgb_model.predict(X_test)),             # recall
+        'f1':  f1_score(y_test, xgb_model.predict(X_test)),                 # f1 score
+        'auc': roc_auc_score(y_test, xgb_model.predict_proba(X_test)[:,1])  # roc auc
+    }
 
     # select best model based on accuracy
-    if xgb_acc >= rf_acc:
+    if xgb_metrics['acc'] >= rf_metrics['acc']:
         best_model = xgb_model  # xgboost better or equal
         best_name = "XGBoost"
     else:
@@ -48,18 +64,8 @@ def train():
 
     print(f"Best Model: {best_name}")  # log best model name
 
-    # evaluate best model metrics for mlflow
-    y_pred = best_model.predict(X_test)  # predictions
-    y_prob = best_model.predict_proba(X_test)[:, 1]  # probabilities
-
-    acc = accuracy_score(y_test, y_pred)   # accuracy
-    pre = precision_score(y_test, y_pred)  # precision
-    rec = recall_score(y_test, y_pred)     # recall
-    f1  = f1_score(y_test, y_pred)         # f1 score
-    auc = roc_auc_score(y_test, y_prob)    # roc auc
-
-    # log all metrics and model to mlflow
-    log_run(best_model, best_name, acc, pre, rec, f1, auc)
+    # log both models to mlflow for comparison
+    log_all_runs(rf_model, rf_metrics, xgb_model, xgb_metrics, best_name)
 
     # save best model to disk
     os.makedirs('./ml', exist_ok=True)  # create ml dir if not exists
