@@ -9,18 +9,18 @@ import os  # access env variables
 
 load_dotenv()  # load .env file
 
-def get_pg_engine():
-    # build postgresql connection string for data warehouse
+def get_engine():
+    # build mysql connection string
     url = (
-        f"postgresql+psycopg2://{os.getenv('PG_USER')}:{os.getenv('PG_PASSWORD')}"
-        f"@{os.getenv('PG_HOST')}:{os.getenv('PG_PORT')}/{os.getenv('PG_NAME')}"
+        f"mysql+pymysql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}"
+        f"@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
     )
-    return create_engine(url)  # return postgresql engine
+    return create_engine(url)  # return engine
 
 def generate_drift_report():
-    engine = get_pg_engine()  # get postgresql warehouse connection
+    engine = get_engine()  # get db connection
 
-    # load full transformed data from postgresql warehouse
+    # load full transformed data
     df = pd.read_sql("SELECT * FROM transformed_shoppers", engine)
 
     # use first 70% as reference (training data)
